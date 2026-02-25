@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FOKI</title>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <style>
 body{
     margin:0;
@@ -13,44 +15,36 @@ body{
     color:#1d1d1f;
 }
 
-/* LOGIN */
-#loginBox{
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
+/* SPLASH SCREEN */
+#splash{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
     height:100vh;
-}
-
-#loginBox h1{
-    font-size:52px;
-    letter-spacing:4px;
-    margin-bottom:20px;
-}
-
-input{
-    padding:12px;
-    margin:8px;
-    border-radius:12px;
-    border:1px solid #ccc;
-    width:260px;
-    font-size:16px;
-}
-
-button{
-    padding:10px 20px;
-    border-radius:12px;
-    border:none;
-    cursor:pointer;
-    font-weight:600;
-    font-size:15px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
     background:linear-gradient(135deg,#667eea,#764ba2);
     color:white;
+    font-size:60px;
+    letter-spacing:6px;
+    font-weight:700;
+    z-index:1000;
+    animation:fadeOut 1s ease forwards;
+    animation-delay:2s;
+}
+
+@keyframes fadeOut{
+    to{
+        opacity:0;
+        visibility:hidden;
+        transform:scale(1.1);
+    }
 }
 
 /* MAIN */
 .container{
-    display:none;
     height:100vh;
     padding:20px;
     box-sizing:border-box;
@@ -62,25 +56,24 @@ button{
     gap:20px;
 }
 
-/* CARDS */
 .card{
     background:white;
     border-radius:22px;
     padding:30px;
     box-shadow:0 12px 30px rgba(0,0,0,0.12);
-    overflow:auto;
+    overflow:hidden;
 }
 
-/* LEFT */
-.left{ width:25%; }
+.center{ width:60%; text-align:center; }
 
-/* CENTER */
-.center{ width:45%; text-align:center; }
+.right{ 
+    width:40%; 
+    text-align:center; 
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
 
-/* RIGHT */
-.right{ width:30%; text-align:center; }
-
-/* SUBJECT */
 .subject{
     display:flex;
     justify-content:space-between;
@@ -106,42 +99,55 @@ button{
     color:white;
 }
 
-/* TOTAL */
 #totalTime{
     font-size:48px;
     margin-top:40px;
     font-weight:700;
 }
 
-/* FOOTER */
+.chart-container{
+    width:270px;
+    height:270px;
+    margin-top:25px;
+}
+
 .footer{
     text-align:center;
     margin-top:10px;
     font-size:16px;
     font-weight:500;
 }
+
+input{
+    padding:12px;
+    margin:8px;
+    border-radius:12px;
+    border:1px solid #ccc;
+    width:260px;
+    font-size:16px;
+}
+
+button{
+    padding:10px 20px;
+    border-radius:12px;
+    border:none;
+    cursor:pointer;
+    font-weight:600;
+    font-size:15px;
+    background:linear-gradient(135deg,#667eea,#764ba2);
+    color:white;
+}
 </style>
 </head>
 
 <body>
 
-<div id="loginBox">
-    <h1>FOKI</h1>
-    <input type="text" id="username" placeholder="Enter Username">
-    <button onclick="login()">Enter</button>
-</div>
+<div id="splash">FOKI</div>
 
-<div class="container" id="app">
+<div class="container">
 
     <div class="dashboard">
 
-        <!-- LEFT -->
-        <div class="card left">
-            <h2>🏆 Leaderboard (Today)</h2>
-            <div id="leaderboardList" style="font-size:18px;"></div>
-        </div>
-
-        <!-- CENTER -->
         <div class="card center">
             <h2>📚 Study Subjects</h2>
             <div id="subjects"></div>
@@ -149,10 +155,13 @@ button{
             <button onclick="addSubject()">Add</button>
         </div>
 
-        <!-- RIGHT -->
         <div class="card right">
             <h2>Total Studied Today</h2>
             <div id="totalTime">00:00:00</div>
+
+            <div class="chart-container">
+                <canvas id="studyChart"></canvas>
+            </div>
         </div>
 
     </div>
@@ -164,35 +173,30 @@ button{
 </div>
 
 <script>
-let currentUser=null;
+
 let timer=null;
 let activeSubject=null;
 let userData=null;
+let chart=null;
 
-/* LOGIN */
-function login(){
-    const name=document.getElementById("username").value.trim();
-    if(!name) return;
+/* COLOR POOL FOR UNLIMITED SUBJECTS */
+const colorPool=[
+"#36a2eb","#ff6384","#ffce56","#4bc0c0",
+"#9966ff","#ff9f40","#2ecc71","#e74c3c",
+"#9b59b6","#1abc9c","#f39c12","#34495e",
+"#16a085","#d35400","#8e44ad","#27ae60"
+];
 
-    currentUser=name;
-    document.getElementById("loginBox").style.display="none";
-    document.getElementById("app").style.display="block";
+setTimeout(()=>{
+    document.getElementById("splash").style.display="none";
+},2500);
 
-    loadData();
-    renderSubjects();
-    updateUI();
-    updateLeaderboard();
-}
-
-/* LOAD DATA */
 function loadData(){
     const today=new Date().toLocaleDateString();
-    const saved=localStorage.getItem(currentUser);
+    const saved=localStorage.getItem("FOKI_USER");
 
     if(saved){
         userData=JSON.parse(saved);
-
-        /* RESET IF NEW DAY */
         if(userData.date !== today){
             for(let s in userData.subjects){
                 userData.subjects[s].total=0;
@@ -200,7 +204,6 @@ function loadData(){
             userData.date=today;
             saveData();
         }
-
     }else{
         userData={
             date:today,
@@ -214,12 +217,10 @@ function loadData(){
     }
 }
 
-/* SAVE */
 function saveData(){
-    localStorage.setItem(currentUser,JSON.stringify(userData));
+    localStorage.setItem("FOKI_USER",JSON.stringify(userData));
 }
 
-/* RENDER SUBJECTS */
 function renderSubjects(){
     const container=document.getElementById("subjects");
     container.innerHTML="";
@@ -234,7 +235,6 @@ function renderSubjects(){
     }
 }
 
-/* TIMER */
 function toggleTimer(sub){
     const btn=document.getElementById(sub+"Btn");
 
@@ -244,7 +244,6 @@ function toggleTimer(sub){
         btn.innerText="▶";
         activeSubject=null;
         saveData();
-        updateLeaderboard();
         return;
     }
 
@@ -264,19 +263,30 @@ function toggleTimer(sub){
     },1000);
 }
 
-/* UPDATE UI */
 function updateUI(){
     let total=0;
+    let labels=[];
+    let data=[];
+    let colors=[];
+    let index=0;
+
     for(let s in userData.subjects){
         total+=userData.subjects[s].total;
         document.getElementById(s+"Time").innerText=
             formatTime(userData.subjects[s].total);
+
+        if(userData.subjects[s].total > 0){
+            labels.push(s);
+            data.push(userData.subjects[s].total);
+            colors.push(colorPool[index % colorPool.length]);
+            index++;
+        }
     }
 
     document.getElementById("totalTime").innerText=formatTime(total);
+    updateChart(labels,data,colors);
 }
 
-/* ADD SUBJECT */
 function addSubject(){
     const name=document.getElementById("newSubject").value.trim();
     if(name && !userData.subjects[name]){
@@ -287,39 +297,59 @@ function addSubject(){
     }
 }
 
-/* LEADERBOARD (DAILY RESET AUTO) */
-function updateLeaderboard(){
-    const today=new Date().toLocaleDateString();
-    let board=[];
-
-    for(let key in localStorage){
-        try{
-            let data=JSON.parse(localStorage.getItem(key));
-            if(data && data.date===today){
-                let total=Object.values(data.subjects)
-                    .reduce((a,b)=>a+b.total,0);
-                board.push({name:key,total});
-            }
-        }catch(e){}
-    }
-
-    board.sort((a,b)=>b.total-a.total);
-
-    let html="";
-    board.slice(0,5).forEach((u,i)=>{
-        html+=`<p>${i+1}. ${u.name} - ${formatTime(u.total)}</p>`;
-    });
-
-    document.getElementById("leaderboardList").innerHTML=html;
-}
-
-/* FORMAT TIME */
 function formatTime(sec){
     let h=String(Math.floor(sec/3600)).padStart(2,'0');
     let m=String(Math.floor((sec%3600)/60)).padStart(2,'0');
     let s=String(sec%60).padStart(2,'0');
     return `${h}:${m}:${s}`;
 }
+
+function initChart(){
+    const ctx=document.getElementById("studyChart").getContext("2d");
+    chart=new Chart(ctx,{
+        type:"pie",
+        data:{
+            labels:["No Study Yet"],
+            datasets:[{
+                data:[1],
+                backgroundColor:["#e0eafc"]
+            }]
+        },
+        options:{
+            responsive:true,
+            maintainAspectRatio:false,
+            plugins:{
+                legend:{ 
+                    position:"bottom",
+                    labels:{
+                        font:{
+                            size:16   /* Bigger legend text */
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateChart(labels,data,colors){
+    if(data.length===0){
+        chart.data.labels=["No Study Yet"];
+        chart.data.datasets[0].data=[1];
+        chart.data.datasets[0].backgroundColor=["#e0eafc"];
+    }else{
+        chart.data.labels=labels;
+        chart.data.datasets[0].data=data;
+        chart.data.datasets[0].backgroundColor=colors;
+    }
+    chart.update();
+}
+
+loadData();
+renderSubjects();
+initChart();
+updateUI();
+
 </script>
 
 </body>
